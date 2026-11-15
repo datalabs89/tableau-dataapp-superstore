@@ -7,6 +7,8 @@ datasource at runtime.
 
 Built following `https://tableau.github.io/extensions-api/docs/dataapps/`.
 
+![The app in light mode](docs/preview-light.png)
+
 ---
 
 ## Getting it running
@@ -80,7 +82,15 @@ from the same filtered slice, so the numbers always agree with each other.
 - **Every sub-category** — sortable table; click a row to filter.
 
 Filters live in one row above everything they scope. Each chart has a table view
-(its WCAG-clean twin). Light and dark are both selected for their own surface.
+(its WCAG-clean twin). Light and dark are both selected for their own surface —
+the palette was validated against each mode's surface rather than inverted:
+
+<details>
+<summary>Dark mode</summary>
+
+![The app in dark mode](docs/preview-dark.png)
+
+</details>
 
 ## Data
 
