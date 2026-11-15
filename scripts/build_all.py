@@ -34,6 +34,7 @@ VERIFY = [
     # Reads the expectations file the build wrote, not the workbook itself.
     ("verify_render.py", "rendered figures vs independent recomputation", False),
     ("verify_aggregation.py", "aggregation vs pandas across 9 slices", True),
+    ("verify_framed.py", "app boots inside a sandboxed cross-origin frame", False),
 ]
 
 

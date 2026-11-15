@@ -23,9 +23,9 @@ REF = ROOT / "reference" / "dataapp-sample"
 OUT = ROOT / "build" / "control"
 
 PKG_ID = "com.tableau.mcp.tableau-superstore-data-app"
-XLS_CANDIDATES = [
-    Path.home() / "Downloads" / "Sample - Superstore PJJ Duktek 2026.xls",
-]
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from source_data import find_source  # noqa: E402
 
 
 def main() -> int:
@@ -40,8 +40,15 @@ def main() -> int:
     stage = OUT / "Tableau Superstore Data App"
     (stage / "Data" / "Datasources").mkdir(parents=True)
 
-    # The workbook, verbatim - it is Tableau's own file, unmodified.
-    shutil.copy2(twb, stage / "Tableau Superstore Data App.twb")
+    # Tableau's own workbook, with ONE change: the data file's extension, so
+    # the connection resolves. Every other byte is Tableau's.
+    text = twb.read_text(encoding="utf-8")
+    old = "Data/Datasources/Sample - Superstore.xls"
+    new = "Data/Datasources/Sample - Superstore.xlsx"
+    if old not in text:
+        raise SystemExit(f"FATAL: sample.twb no longer references {old}")
+    (stage / "Tableau Superstore Data App.twb").write_text(
+        text.replace(old, new), encoding="utf-8")
 
     # Its package, laid out where the .twb expects it.
     dest_pkg = stage / "Packages" / PKG_ID
@@ -56,15 +63,17 @@ def main() -> int:
             (dest_pkg / "content" / rel).parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(f, dest_pkg / "content" / rel)
 
-    # The sample's connection is excel-direct to this path. The original .xls is
-    # not in the repo; any Superstore .xls with the same three sheets will do,
-    # because the question here is whether the PANE renders, not the data.
-    xls = next((p for p in XLS_CANDIDATES if p.exists()), None)
-    if xls is not None:
-        shutil.copy2(xls, stage / "Data" / "Datasources" / "Sample - Superstore.xls")
-        print(f"data     : {xls.name}")
-    else:
-        print("data     : (none found - the datasource will error, pane test still valid)")
+    # The sample's connection is excel-direct to `Data/Datasources/Sample -
+    # Superstore.xls`, and its cached metadata declares State/Province.
+    #
+    # The first version of this control copied a .xls that has a `State` column
+    # instead - so the control's datasource could fail on its own and the blank
+    # pane would have proved nothing. The .xlsx in this project matches the
+    # declared columns exactly, so it is renamed to the .xls path the template
+    # expects. A control has to differ from the subject in exactly one way.
+    xlsx = find_source()
+    shutil.copy2(xlsx, stage / "Data" / "Datasources" / "Sample - Superstore.xlsx")
+    print(f"data     : {xlsx.name} (real .xlsx, so the datasource connects)")
 
     twbx = OUT / "Tableau Superstore Data App.twbx"
     with zipfile.ZipFile(twbx, "w", zipfile.ZIP_DEFLATED) as z:

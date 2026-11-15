@@ -126,6 +126,7 @@ python scripts/verify_package.py      # conformance to the packaging spec
 python scripts/verify_opens.py        # the workbook opens in Tableau's own readers
 python scripts/verify_render.py       # renders in Chromium; checks the figures
 python scripts/verify_aggregation.py  # JS aggregation vs pandas, 9 slices
+python scripts/verify_framed.py       # boots inside a sandboxed cross-origin frame
 ```
 
 `verify_package.py` asserts the things that silently break a data app: identity
@@ -150,6 +151,12 @@ them against an independent recomputation from the source workbook — a chart t
 draws the wrong number fails here. It also exercises the filters, reset, table
 views, the theme toggle (asserting the SVG marks actually repaint), and
 horizontal overflow at phone width.
+
+`verify_framed.py` loads the app's real page inside a cross-origin sandboxed
+iframe, which is how Tableau loads it — a page that works standalone can still
+break in that context. Inside a frame the app correctly takes the Tableau path,
+so this harness outwaits `initializeAsync()`'s 8s bound and asserts the app
+either mounts or reaches its fallback with nothing blocked.
 
 `verify_aggregation.py` runs the app's own aggregation for slices the render
 check never visits, and cross-checks that every rollup sums to its total. This
@@ -198,16 +205,27 @@ is 1.17.0 and does **not** have them.
 Permissions needed to view: View + full data query + API access to the workbook,
 and Connect on the datasource it carries.
 
-### One thing to know about Desktop
+### What you can and cannot see locally
 
-Data apps are a **Cloud-only beta**. When the `.twbx` is opened in Tableau
-Desktop, the workbook and its datasource load correctly, but the extension pane
-renders empty — Desktop does not host data apps. This was verified by building
-Tableau's own published Superstore sample the same way and opening it:
-`scripts/build_control_sample.py` produces it, and it behaves identically
-(`Data in This Viz: No data available`). The blank pane is the platform, not the
-packaging. Use the bundled single-file HTML preview, or publish to Cloud, to see
-the app itself.
+Data apps are a **Cloud-only beta**. Tableau's own documentation states it
+plainly: *"The data Apps beta is available only on Tableau Cloud."*
+
+In **Tableau Desktop** the `.twbx` opens correctly and its datasource loads —
+verified, with screenshots — but **the extension pane is empty**. Desktop does
+not host data apps, so there is nothing to render into it. This is not a
+packaging defect: Tableau's own published Superstore sample behaves identically
+when assembled the same way (`scripts/build_control_sample.py` reproduces it).
+
+| You want to… | Use |
+|---|---|
+| See and click the app | `build/Superstore-Executive-preview.html` — opens in any browser, no server |
+| Confirm the workbook is sound | `build/Superstore Executive.twbx` in Tableau Desktop |
+| See the **published** app | Publish the `.twbx` to a Tableau Cloud site with the beta enabled |
+
+The browser preview runs the identical app code off the same 10,194 rows, and
+its figures are verified against a separate recomputation. What it cannot prove
+is the runtime path — `ds.queryAsync()` talking to Tableau. That is only
+exercised on Cloud, by the published app's **Data** pane.
 
 ## Layout
 

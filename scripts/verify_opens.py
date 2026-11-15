@@ -10,13 +10,22 @@ readers, from weakest to strongest:
   2. Tableau Document API - the library Tableau publishes for reading .twb/.twbx.
                             Loads the workbook into its object model and reads
                             the datasource, connections and fields back out.
-  3. Tableau Desktop (COM)- actually opens the file in the application, when
-                            Desktop is installed. This is the real answer to
-                            "does it open", and it is skipped with a clear
-                            message when Desktop is absent.
+  3. Tableau Desktop (COM)- opens the file in the application, when Desktop is
+                            installed.
 
-Any of the first two failing is a hard failure. The third is skipped, not
-failed, when Tableau is not installed on the machine running the check.
+WHAT THIS DOES NOT PROVE, AND CANNOT
+------------------------------------
+Data apps are a **Cloud-only beta**. Tableau's own docs state it plainly:
+"The data Apps beta is available only on Tableau Cloud." Desktop will open the
+workbook and connect its datasource, but it does not host the data app, so the
+extension pane renders EMPTY there. This was confirmed two ways: by building
+Tableau's own published Superstore sample with a working datasource
+(scripts/build_control_sample.py) and opening it - identical blank pane - and by
+the documentation above.
+
+So a passing run here means the FILE is sound. Whether the APP renders can only
+be established on a Tableau Cloud site with the beta enabled. No amount of local
+tooling substitutes for that, and this script does not pretend otherwise.
 """
 
 from __future__ import annotations
@@ -72,7 +81,12 @@ def main() -> int:
         for f in failures:
             print("  -", f)
         return 1
-    print("PASS - the workbook opens in every reader available on this machine.")
+    print("PASS - the workbook is sound and opens in every reader on this machine.")
+    print()
+    print("NOTE  This does not prove the APP renders. Data apps are Cloud-only:")
+    print("      Tableau Desktop opens the workbook but does not host the app, so")
+    print("      its extension pane is empty there. Confirm on a Cloud site with")
+    print("      the beta enabled. See the module docstring.")
     return 0
 
 
