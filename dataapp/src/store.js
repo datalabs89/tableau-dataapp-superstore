@@ -180,6 +180,11 @@
       { fieldCaption: 'Discount', function: 'AVG', fieldAlias: 'Disc' },
       { fieldCaption: 'Order ID', function: 'COUNTD', fieldAlias: 'Orders' },
       { fieldCaption: 'Customer Name', function: 'COUNTD', fieldAlias: 'Custs' },
+      // Line-item count. COUNT() is the right aggregate here and is supported by
+      // the Data Service; without it the scope line and the "across N line
+      // items" footnote read zero on the live path, which looks like a broken
+      // query even though every other figure is correct.
+      { fieldCaption: 'Row ID', function: 'COUNT', fieldAlias: 'Lines' },
     ], filters);
 
     var monthQ = self.query([
@@ -264,7 +269,7 @@
       avgDiscount: n(val(k, 'Disc', 'AVG(Discount)')),
       orders: n(val(k, 'Orders', 'COUNTD(Order ID)')),
       customers: n(val(k, 'Custs', 'COUNTD(Customer Name)')),
-      lines: null,   // not asked of Tableau; the band rollup carries counts
+      lines: n(val(k, 'Lines', 'COUNT(Row ID)')),
     };
     kpi.margin = kpi.sales ? kpi.profit / kpi.sales : 0;
 

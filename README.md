@@ -11,6 +11,13 @@ Built following `https://tableau.github.io/extensions-api/docs/dataapps/`.
 
 ---
 
+**Published and rendering on Tableau Cloud.** Live figures match the preview
+exactly, and the top-bar badge reads *Live · Tableau* — so the runtime path
+(`ds.queryAsync()` against the workbook's datasource) is confirmed working, not
+just theorised.
+
+---
+
 ## Getting it running
 
 ```bash
@@ -220,12 +227,31 @@ when assembled the same way (`scripts/build_control_sample.py` reproduces it).
 |---|---|
 | See and click the app | `build/Superstore-Executive-preview.html` — opens in any browser, no server |
 | Confirm the workbook is sound | `build/Superstore Executive.twbx` in Tableau Desktop |
-| See the **published** app | Publish the `.twbx` to a Tableau Cloud site with the beta enabled |
+| See the **published** app | `scripts/publish_to_cloud.py --project <name> --overwrite` |
 
 The browser preview runs the identical app code off the same 10,194 rows, and
-its figures are verified against a separate recomputation. What it cannot prove
-is the runtime path — `ds.queryAsync()` talking to Tableau. That is only
-exercised on Cloud, by the published app's **Data** pane.
+its figures are verified against a separate recomputation. The runtime path —
+`ds.queryAsync()` talking to Tableau — was confirmed separately on Cloud: the
+published view renders `Live · Tableau` with totals identical to the preview.
+
+### Publishing
+
+```bash
+export TABLEAU_SERVER=https://<pod>.online.tableau.com
+export TABLEAU_SITE=<site content url>
+export TABLEAU_PAT_NAME=<token name>
+export TABLEAU_PAT_VALUE=<token secret>
+
+python scripts/publish_to_cloud.py --list-projects
+python scripts/publish_to_cloud.py --project "Default" --overwrite
+```
+
+Credentials come from the environment only — never written to the repo, never
+passed as arguments, so they stay out of shell history and the process table.
+
+One thing the API cannot tell you: whether the site has **Settings → Packages →
+Allow Packages on this Site** enabled. Without it the workbook publishes fine and
+the pane stays empty, which looks identical to a packaging fault.
 
 ## Layout
 
