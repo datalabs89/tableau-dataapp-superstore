@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Superstore Executive</title>
+    <!--
+      No build step: this file is the shippable artifact, served verbatim from
+      inside the workbook package. Every script is a classic <script> (not a
+      module) listed at the end of <body> in dependency order; each registers
+      its exports on window.SV.
+    -->
+    <link rel="stylesheet" href="src/styles.css" />
+  </head>
+  <body>
+    <!-- main.js replaces this. If it stays up, the scripts never ran. -->
+    <div id="root"><p class="boot">Loading Superstore Executive…</p></div>
+
+    <script src="src/tableau.extensions.1.latest.min.js"></script>
+    <script src="src/boot.js"></script>
+    <script src="src/dom.js"></script>
+    <script src="src/constants.js"></script>
+    <script src="src/format.js"></script>
+    <script src="src/primitives.js"></script>
+    <script src="src/tooltip.js"></script>
+    <script src="src/card.js"></script>
+    <script src="src/aggregate.js"></script>
+    <script src="src/store.js"></script>
+    <script src="src/kpi.js"></script>
+    <script src="src/chart-monthly.js"></script>
+    <script src="src/chart-region.js"></script>
+    <script src="src/chart-rank.js"></script>
+    <script src="src/chart-heat.js"></script>
+    <script src="src/chart-scatter.js"></script>
+    <script src="src/detail-table.js"></script>
+    <script src="src/findings.js"></script>
+    <script src="src/filter-bar.js"></script>
+    <script src="src/app.js"></script>
+    <script src="src/main.js"></script>
+  </body>
+</html>

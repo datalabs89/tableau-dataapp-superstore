@@ -1,0 +1,21 @@
+# Build output. Regenerate with the scripts in scripts/ (see README).
+build/
+
+# Third-party reference files, fetched on demand by scripts/fetch_reference.py.
+# Not this project's work to redistribute; the library alone is 285 KB of
+# minified bundler output.
+reference/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
