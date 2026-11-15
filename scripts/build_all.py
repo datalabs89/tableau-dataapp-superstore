@@ -30,6 +30,7 @@ BUILD = [
 
 VERIFY = [
     ("verify_package.py", "conformance to the packaging spec", False),
+    ("verify_opens.py", "workbook opens in Tableau's own readers", False),
     # Reads the expectations file the build wrote, not the workbook itself.
     ("verify_render.py", "rendered figures vs independent recomputation", False),
     ("verify_aggregation.py", "aggregation vs pandas across 9 slices", True),

@@ -119,17 +119,31 @@ python scripts/build_singlefile.py      # -> one self-contained .html
 Requires Python 3 with `pandas`, `openpyxl` and `playwright` (Chromium
 installed). No Node build step: the app ships as the source it is written in.
 
-### The three checks
+### The checks
 
 ```bash
 python scripts/verify_package.py      # conformance to the packaging spec
+python scripts/verify_opens.py        # the workbook opens in Tableau's own readers
 python scripts/verify_render.py       # renders in Chromium; checks the figures
 python scripts/verify_aggregation.py  # JS aggregation vs pandas, 9 slices
 ```
 
 `verify_package.py` asserts the things that silently break a data app: identity
 strings matching across `manifest.json` / `.trex` / `.twb`, the ZIP root layout,
-HTTPS on the author URL, and that the package ships **no** bundled data.
+HTTPS on the author URL, and — importantly — that the workbook **parses as XML**
+and carries a live datasource pointing at the bundled data by a **relative** path.
+
+That XML check is not decoration. An earlier revision of this project shipped a
+`.twb` that every string check passed and that Tableau could not open at all: a
+regex replacing the datasource had over-matched by 29 KB and swallowed the
+element's closing tag. String matching can never establish that a file is
+openable, so the check now reads the file, and
+`scripts/test_gate_catches_old_bug.py` re-injects that exact malformation to
+prove the gate still rejects it.
+
+`verify_opens.py` goes further and hands the workbook to **Tableau's own Document
+API**, reading the datasource and all 53 fields back out. It also drives Tableau
+Desktop when it is installed.
 
 `verify_render.py` reads the figures back out of the rendered DOM and compares
 them against an independent recomputation from the source workbook — a chart that
@@ -149,17 +163,19 @@ same numbers, so a divergence means a query is wrong.
 Two backends, one output contract (`src/aggregate.js` + `src/store.js`):
 
 - **`TableauStore`** — the published path. `ds.queryAsync()` (VizQL Data Service)
-  runs the nine queries listed in the app's **Data** tab against the published
+  runs the nine queries listed in the app's **Data** tab against the workbook's
   datasource, so Tableau does the aggregation and row-level security applies.
-- **`PreviewStore`** — review path only. Fetches bundled rows and aggregates in JS.
+- **`PreviewStore`** — review path only. Aggregates bundled rows in JS.
 
 Both resolve to the same `agg` shape, so every view is written once. The two
 engines are independent on purpose: the preview proves the layout, the runtime
 proves the app reads governed Tableau data. The badge in the top bar says which
 one is live.
 
-**The shipped package contains no data.** A viewer can never be shown a stale
-bundled copy — that is why the preview directory is built separately.
+The workbook carries its data so it opens and publishes as a unit. That data is
+the same 10,194 rows the preview uses, so the preview is a rehearsal rather than
+a mock-up — but the runtime figures still come from Tableau, not from the
+packaged file, which is why the two paths are verified separately.
 
 `tableau.extensions.1.latest.min.js` is **1.19.0-pre.10**, the build that
 exposes `queryAsync()` and `readMetadata()`. The SDK clone in `~/extensions-api/lib`
@@ -167,11 +183,12 @@ is 1.17.0 and does **not** have them.
 
 ## Before publishing
 
-1. **Repoint the datasource.** `build_package.py` writes placeholders — edit
-   `retarget_datasource()` with your real Tableau Cloud host and site, then
-   rebuild. A published datasource named `Superstore` must exist.
-2. **Publish** `Superstore Executive.twbx` to a project, via Tableau Desktop or
-   Tableau MCP (`publish-workbook`).
+1. **Nothing to reconfigure.** The workbook connects to the data packaged inside
+   it (`Data/Datasources/Sample - Superstore.xlsx`, a path relative to the
+   `.twb`), so it opens with data and travels with it. There is no server name,
+   site, or pre-existing published datasource to fill in.
+2. **Publish** `Superstore Executive.twbx` to a Tableau Cloud project, via
+   Tableau Desktop or Tableau MCP (`publish-workbook`).
 3. **Enable the site controls.** Tableau Cloud → **Settings → Packages**:
    *Allow Packages on this Site*. No allowed origins are needed (nothing is
    loaded externally) and no REST paths (the app makes no `fetch()` calls).
@@ -179,7 +196,18 @@ is 1.17.0 and does **not** have them.
    *The Query*, `Authored` / `Executed` / `Data` show what ran and sample rows.
 
 Permissions needed to view: View + full data query + API access to the workbook,
-**and** View + Connect + API access to the `Superstore` datasource.
+and Connect on the datasource it carries.
+
+### One thing to know about Desktop
+
+Data apps are a **Cloud-only beta**. When the `.twbx` is opened in Tableau
+Desktop, the workbook and its datasource load correctly, but the extension pane
+renders empty — Desktop does not host data apps. This was verified by building
+Tableau's own published Superstore sample the same way and opening it:
+`scripts/build_control_sample.py` produces it, and it behaves identically
+(`Data in This Viz: No data available`). The blank pane is the platform, not the
+packaging. Use the bundled single-file HTML preview, or publish to Cloud, to see
+the app itself.
 
 ## Layout
 

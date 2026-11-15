@@ -4,7 +4,15 @@ Validate the built package against the Extensions API data-app spec.
 Checks the things that silently make an extension pane load blank or an app
 fail to publish: identity strings that must match across three files, the
 package layout, the URL scheme, and a .twbx whose root really is the .twb plus
-Packages/. Also proves the shipped package carries no bundled data.
+Packages/.
+
+This script also asserts the workbook PARSES AS XML and carries a live
+datasource. That assertion is not decoration: an earlier revision shipped a
+.twb that every string check here passed and that Tableau could not open at
+all, because the datasource block had been mangled. String matching can never
+establish that a file is openable - only reading it can - so this script now
+reads it. `verify_opens.py` goes further and hands the workbook to Tableau's own
+Document API.
 """
 
 from __future__ import annotations
@@ -19,10 +27,15 @@ from xml.etree import ElementTree as ET
 ROOT = Path(__file__).resolve().parent.parent
 PKG = ROOT / "build" / "package"
 TWBX = ROOT / "build" / "Superstore Executive.twbx"
+DATA_REL = "Data/Datasources/Sample - Superstore.xlsx"
 NS = {"m": "http://www.tableau.com/xml/extension_manifest"}
 
 problems: list[str] = []
 notes: list[str] = []
+
+
+def local(tag: str) -> str:
+    return tag.split("}")[-1]
 
 
 def check(cond: bool, msg: str) -> None:
@@ -111,12 +124,72 @@ def main() -> int:
     check("mark class='VizExtension'" in twb, "pane carries the VizExtension mark")
     check("referenced-extensions" in twb, "workbook carries the referenced-extension block")
 
-    # ---- the package must ship no data ----------------------------------
-    data_files = [p for p in pkgdir.rglob("*")
-                  if p.is_file() and p.suffix.lower() in (".json", ".csv", ".xls", ".xlsx")
-                  and p.name != "manifest.json"]
-    check(not data_files,
-          f"package ships no bundled data ({[p.name for p in data_files]})")
+    # ---- the workbook must be a workbook, not just text that mentions one ---
+    # These are the checks whose absence let a malformed .twb ship.
+    if twb_path.exists():
+        try:
+            tree = ET.parse(twb_path)
+            check(True, "workbook parses as well-formed XML")
+            wb = tree.getroot()
+            check(local(wb.tag) == "workbook",
+                  f"root element is <workbook> (got <{local(wb.tag)}>)")
+
+            ds_el = wb.find("datasources")
+            n_ds = len(list(ds_el)) if ds_el is not None else 0
+            check(n_ds >= 1,
+                  f"workbook declares a datasource ({n_ds}) - an empty one cannot query")
+
+            # Relative path only: an absolute one opens on the build machine and
+            # nowhere else.
+            fnames = re.findall(r"filename='([^']*)'", twb)
+            check(bool(fnames), f"datasource names a file ({fnames})")
+            check(all(f and not f.startswith(("/", "\\")) and ":" not in f
+                      for f in fnames),
+                  f"datasource path is relative, so it travels with the workbook ({fnames})")
+            check(DATA_REL in twb,
+                  f"datasource points at the bundled data ({DATA_REL})")
+
+            # A connection element must exist and must be the kind that reads a
+            # packaged file, not a stub.
+            check("class='excel-direct'" in twb or "class='federated'" in twb,
+                  "workbook has a real connection class")
+            check(len(list(wb.iter())) > 100,
+                  f"workbook has a real element tree ({len(list(wb.iter()))} elements)")
+
+            check(wb.find("worksheets") is not None, "workbook has <worksheets>")
+            check(wb.find("windows") is not None, "workbook has <windows>")
+        except ET.ParseError as e:
+            check(False, f"workbook parses as well-formed XML ({e})")
+
+    # The data the workbook references must actually be present beside it.
+    check((PKG / DATA_REL).exists(),
+          f"bundled data file present at {DATA_REL}")
+
+    # ---- Tableau's own reader -------------------------------------------
+    # Tableau publishes a Document API for exactly this. When it is available it
+    # is the strongest evidence short of opening the file in the application.
+    doc_api = None
+    for c in (Path.home() / "document-api-python",
+              ROOT.parent / "document-api-python"):
+        if (c / "tableaudocumentapi").is_dir():
+            doc_api = c
+            break
+    if doc_api is None:
+        notes.append("SKIP  Document API not available - install "
+                     "tableaudocumentapi to check the workbook against Tableau's reader")
+    else:
+        sys.path.insert(0, str(doc_api))
+        try:
+            from tableaudocumentapi import Workbook
+            api_wb = Workbook(str(twb_path))
+            check(len(api_wb.datasources) >= 1,
+                  f"Document API reads the datasource ({[d.name for d in api_wb.datasources]})")
+            fields = sorted(api_wb.datasources[0].fields) if api_wb.datasources else []
+            want = ("Sales", "Profit", "Region", "State/Province", "Order Date")
+            check(all(w in fields for w in want),
+                  f"Document API reads the app's fields ({len(fields)} total)")
+        except Exception as e:  # noqa: BLE001
+            check(False, f"Document API opens the workbook ({type(e).__name__}: {e})")
 
     # ---- .twbx ----------------------------------------------------------
     check(TWBX.exists(), "the .twbx exists")
@@ -131,6 +204,20 @@ def main() -> int:
                   "no extra wrapper directory above the .twb (ZIP root is the package root)")
             bad = z.testzip()
             check(bad is None, f"archive integrity ({bad})")
+            check(DATA_REL in names,
+                  f".twbx carries the data at the same relative path ({DATA_REL})")
+
+            # The .twb inside the archive must parse too, and must be the same
+            # bytes as the one on disk - a stale archive is a real failure mode.
+            inner = [n for n in names if n.endswith(".twb")][0]
+            try:
+                ET.fromstring(z.read(inner))
+                check(True, "the .twb inside the .twbx parses as XML")
+            except ET.ParseError as e:
+                check(False, f"the .twb inside the .twbx parses as XML ({e})")
+            check(z.read(inner) == twb_path.read_bytes(),
+                  "the .twbx embeds the current .twb, not a stale copy")
+
             # Every script the HTML asks for must be inside the archive.
             html = z.read("Packages/%s/content/index.html" % ext_id).decode("utf-8")
             srcs = re.findall(r'src="([^"]+\.js)"', html)
@@ -148,7 +235,6 @@ def main() -> int:
                 blob = z.read(lib).decode("utf-8", "replace")
                 check("queryAsync" in blob, "packaged library exposes queryAsync()")
                 check("readMetadata" in blob, "packaged library exposes readMetadata()")
-        # Sidecar .twb is not shipped separately; only inside the .twbx.
         check(True, f".twbx size {TWBX.stat().st_size / 1024:,.0f} KB")
 
     report()
